@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pinkiitoe Sprite Bingo</title>
+<style>
+:root{--pink:#ff6fae;--purple:#a98cff;--lav:#eee8ff;--ink:#382d4d;--white:#fff}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:linear-gradient(135deg,#fff7fb,#eee8ff);color:var(--ink)}
+header{padding:24px 18px;text-align:center;background:rgba(255,255,255,.8);backdrop-filter:blur(8px);border-bottom:2px solid #eadcf6}
+h1{margin:0 0 5px;font-size:clamp(28px,6vw,46px)}.sub{margin:0;opacity:.75}
+nav{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:18px auto 0}
+button{border:0;border-radius:14px;padding:11px 15px;font-weight:700;cursor:pointer;background:#fff;color:var(--ink);box-shadow:0 3px 12px #00000012}
+button.primary{background:var(--pink);color:#fff}button.active{outline:3px solid #d8c7ff}
+main{max-width:1050px;margin:auto;padding:22px 16px}.panel{background:#ffffffd9;border:1px solid #eadff5;border-radius:22px;padding:20px;box-shadow:0 8px 30px #6f4c8912;margin-bottom:18px}
+h2{margin-top:0}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;max-width:720px;margin:18px auto}
+.cell{aspect-ratio:1;border-radius:12px;border:2px solid #dfd4eb;background:#fff;padding:5px;font-size:clamp(10px,2.2vw,16px);font-weight:750;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer}
+.cell.marked{background:var(--lav);border-color:var(--purple);text-decoration:line-through}.cell.free{background:#ffd8e8;border-color:var(--pink);cursor:default}
+.status{text-align:center;font-size:20px;font-weight:800;min-height:30px}.controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+small.note{display:block;text-align:center;opacity:.65;margin-top:10px}
+table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #eadff5;text-align:left}input,select{width:100%;padding:9px;border:1px solid #d9cce6;border-radius:10px;background:#fff}
+.actions{display:flex;gap:6px;flex-wrap:wrap}.empty{text-align:center;padding:35px;opacity:.7}.hidden{display:none!important}
+@media(max-width:560px){.panel{padding:14px}.grid{gap:4px}.cell{border-radius:8px;padding:2px}}
+</style>
+</head>
+<body>
+<header>
+<h1>☁️ Pinkiitoe Sprite Bingo ☁️</h1>
+<p class="sub">Sprite hunting, but make it bingo.</p>
+<nav>
+<button id="tabBingo" class="primary">🎟️ My Bingo Card</button>
+<button id="tabManager">⚙️ Sprite Manager</button>
+</nav>
+</header>
+
+<main>
+<section id="bingo">
+<div class="panel">
+<h2>🎮 Your Sprite Bingo Card</h2>
+<p>Generate your card, then tap sprites as Pinkiitoe finds them.</p>
+<div class="controls">
+<button class="primary" id="newCard">🎲 Generate My Card</button>
+<button id="clearMarks">↩ Clear Marks</button>
+</div>
+<div id="cardWrap"></div>
+<div id="bingoStatus" class="status"></div>
+<small class="note">Cards use active sprites only. The center square is always FREE.</small>
+</div>
+</section>
+
+<section id="manager" class="hidden">
+<div class="panel">
+<h2>⚙️ Sprite Manager</h2>
+<p>Add your Fortnite base sprites here later. Your list is saved in this browser.</p>
+<div class="controls">
+<button class="primary" id="addBtn">➕ Add Sprite</button>
+<button id="seedBtn">🧪 Add Test Sprites</button>
+<button id="clearBtn">🗑️ Clear All</button>
+</div>
+<div id="managerTable"></div>
+</div>
+<div class="panel">
+<h2>🎲 Rarity weights</h2>
+<p>Higher weight = more likely to appear on cards. You can change these whenever you want.</p>
+<div id="weights"></div>
+</div>
+</section>
+</main>
+
+<script>
+const KEY='pinkiitoe_sprite_bingo_v1';
+const DEFAULT_WEIGHTS={Common:100,Uncommon:55,Rare:25,'Very Rare':10,'Ultra Rare':3};
+let data=JSON.parse(localStorage.getItem(KEY)||'null')||{sprites:[],weights:DEFAULT_WEIGHTS};
+data.weights={...DEFAULT_WEIGHTS,...data.weights};
+function save(){localStorage.setItem(KEY,JSON.stringify(data));}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function active(){return data.sprites.filter(s=>s.active)}
+function weightedPick(pool,used){
+ let choices=pool.filter(s=>!used.has(s.id)); if(!choices.length)return null;
+ let total=choices.reduce((a,s)=>a+(Number(data.weights[s.rarity])||1),0),r=Math.random()*total;
+ for(const s of choices){r-=Number(data.weights[s.rarity])||1;if(r<=0)return s}
+ return choices[choices.length-1];
+}
+let current=[];
+function makeCard(){
+ const pool=active(); if(pool.length<24){alert('You need at least 24 active sprites to make a full card. Add more in Sprite Manager.');return}
+ const used=new Set(); current=[];
+ for(let i=0;i<24;i++){const s=weightedPick(pool,used);used.add(s.id);current.push({s,marked:false})}
+ renderCard();
+}
+function renderCard(){
+ if(!current.length){document.getElementById('cardWrap').innerHTML='<div class="empty">Your card will appear here!<br>Click “Generate My Card.”</div>';return}
+ let cells=[];let j=0;
+ for(let i=0;i<25;i++){
+   if(i===12){cells.push('<div class="cell free">FREE ✨</div>');continue}
+   const x=current[j];const idx=j++;
+   cells.push(`<button class="cell ${x.marked?'marked':''}" data-i="${idx}">${esc(x.s.name)}</button>`);
+ }
+ document.getElementById('cardWrap').innerHTML='<div class="grid">'+cells.join('')+'</div>';
+ document.querySelectorAll('.cell[data-i]').forEach(b=>b.onclick=()=>{current[+b.dataset.i].marked=!current[+b.dataset.i].marked;renderCard();checkBingo()});
+ checkBingo();
+}
+function checkBingo(){
+ if(!current.length)return;
+ let a=current.map(x=>x.marked);a.splice(12,0,true);
+ let win=false;
+ for(let r=0;r<5;r++)if([0,1,2,3,4].every(c=>a[r*5+c]))win=true;
+ for(let c=0;c<5;c++)if([0,1,2,3,4].every(r=>a[r*5+c]))win=true;
+ if([0,6,12,18,24].every(i=>a[i])||[4,8,12,16,20].every(i=>a[i]))win=true;
+ document.getElementById('bingoStatus').textContent=win?'🎉 BINGO! 🎉':'';
+}
+document.getElementById('newCard').onclick=makeCard;
+document.getElementById('clearMarks').onclick=()=>{current.forEach(x=>x.marked=false);renderCard()};
+document.getElementById('tabBingo').onclick=()=>show('bingo');
+document.getElementById('tabManager').onclick=()=>show('manager');
+function show(which){document.getElementById('bingo').classList.toggle('hidden',which!=='bingo');document.getElementById('manager').classList.toggle('hidden',which!=='manager');document.getElementById('tabBingo').classList.toggle('primary',which==='bingo');document.getElementById('tabManager').classList.toggle('primary',which==='manager');if(which==='manager')renderManager()}
+function renderManager(){
+ const root=document.getElementById('managerTable');
+ if(!data.sprites.length){root.innerHTML='<div class="empty">No sprites yet. Click “Add Sprite” or use the test sprites.</div>';return}
+ root.innerHTML='<table><thead><tr><th>Sprite</th><th>Rarity</th><th>Active</th><th></th></tr></thead><tbody>'+
+ data.sprites.map((s,i)=>`<tr><td><input value="${esc(s.name)}" data-name="${i}"></td><td><select data-rarity="${i}">${Object.keys(data.weights).map(r=>`<option ${s.rarity===r?'selected':''}>${r}</option>`).join('')}</select></td><td><input type="checkbox" data-active="${i}" ${s.active?'checked':''}></td><td><button data-del="${i}">Delete</button></td></tr>`).join('')+'</tbody></table>';
+ root.querySelectorAll('[data-name]').forEach(e=>e.onchange=()=>{data.sprites[+e.dataset.name].name=e.value.trim()||'Unnamed Sprite';save()});
+ root.querySelectorAll('[data-rarity]').forEach(e=>e.onchange=()=>{data.sprites[+e.dataset.rarity].rarity=e.value;save()});
+ root.querySelectorAll('[data-active]').forEach(e=>e.onchange=()=>{data.sprites[+e.dataset.active].active=e.checked;save()});
+ root.querySelectorAll('[data-del]').forEach(e=>e.onclick=()=>{data.sprites.splice(+e.dataset.del,1);save();renderManager()});
+}
+document.getElementById('addBtn').onclick=()=>{data.sprites.push({id:crypto.randomUUID(),name:'New Sprite',rarity:'Common',active:true});save();renderManager()};
+document.getElementById('seedBtn').onclick=()=>{['Test Sprite 1','Test Sprite 2','Test Sprite 3','Test Sprite 4','Test Sprite 5','Test Sprite 6','Test Sprite 7','Test Sprite 8','Test Sprite 9','Test Sprite 10','Test Sprite 11','Test Sprite 12','Test Sprite 13','Test Sprite 14','Test Sprite 15','Test Sprite 16','Test Sprite 17','Test Sprite 18','Test Sprite 19','Test Sprite 20','Test Sprite 21','Test Sprite 22','Test Sprite 23','Test Sprite 24'].forEach((n,i)=>data.sprites.push({id:crypto.randomUUID(),name:n,rarity:i>21?'Ultra Rare':i>18?'Very Rare':i>14?'Rare':i>8?'Uncommon':'Common',active:true}));save();renderManager()};
+document.getElementById('clearBtn').onclick=()=>{if(confirm('Delete every sprite?')){data.sprites=[];save();renderManager()}};
+function renderWeights(){
+ document.getElementById('weights').innerHTML='<table><tbody>'+Object.keys(data.weights).map(r=>`<tr><td>${r}</td><td><input type="number" min="0" step="1" value="${data.weights[r]}" data-w="${r}"></td></tr>`).join('')+'</tbody></table>';
+ document.querySelectorAll('[data-w]').forEach(e=>e.onchange=()=>{data.weights[e.dataset.w]=Math.max(0,Number(e.value)||0);save()});
+}
+renderWeights();renderCard();
+</script>
+</body>
+</html>
